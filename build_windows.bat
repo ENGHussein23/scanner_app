@@ -22,10 +22,13 @@ if errorlevel 1 (
 ) else (
     set "ISCC=iscc"
 )
+if not exist release mkdir release
 if defined ISCC (
     "%ISCC%" packaging\HomsScanner.iss || goto :fail
     echo.
     echo DONE: dist\HomsScanner-Setup.exe  ^(give this single file to the employees^)
+    powershell -NoProfile -Command "Compress-Archive -Force -Path dist\HomsScanner-Setup.exe -DestinationPath release\homeScanner1.1.0.zip" || goto :fail
+    echo RELEASE ZIP: release\homeScanner1.1.0.zip  ^(upload it to GitHub Releases^)
 ) else (
     echo.
     echo Built dist\HomsScanner\HomsScanner.exe. Install Inno Setup 6 ^(jrsoftware.org^) and run again to get the Setup file.

@@ -17,7 +17,8 @@ from urllib.parse import urlparse
 from flask import Flask, jsonify, request, send_file, send_from_directory
 
 from scanner.base import ScanOptions
-from scanner.config import VERSION, Config
+from scanner.config import VERSION, Config, ConfigError
+from scanner.i18n import DEFAULT_LANG, LANGUAGES, Msg, from_accept_language, normalize_lang, pages as pages_msg, render as render_msg
 from scanner.jobs import BusyError, JobManager
 from scanner.manager import ScannerManager, load_backends
 from scanner.store import PageStore, sanitize_filename
@@ -45,8 +46,20 @@ def create_app(demo: bool = False, data_dir=None, config: Config | None = None, 
     jobs = JobManager(manager, store)
     app.config.update(store=store, manager=manager, jobs=jobs, demo=demo, scanner_config=config)
 
-    def error(message: str, status: int = 400, **extra):
-        return jsonify(error=message, **extra), status
+    def request_lang() -> str:
+        """Language for this request: X-Lang header, ?lang=, Accept-Language, then the setting."""
+        return (
+            normalize_lang(request.headers.get("X-Lang"))
+            or normalize_lang(request.args.get("lang"))
+            or from_accept_language(request.headers.get("Accept-Language"))
+            or config.effective_language()
+        )
+
+    def error(message, status: int = 400, **extra):
+        """JSON error. `message` is a Msg (translated for this request) or plain text.
+        Msg errors also carry a stable `code` that integrations can rely on."""
+        code = {"code": message.key} if isinstance(message, Msg) else {}
+        return jsonify(error=render_msg(message, request_lang()), **code, **extra), status
 
     # ---- protection: this app serves private scans on localhost ---------
     @app.before_request
@@ -95,7 +108,8 @@ def create_app(demo: bool = False, data_dir=None, config: Config | None = None, 
     @app.get("/api/config")
     def api_config():
         """What the scan page needs: the default scan options."""
-        return jsonify(defaults=config.to_json()["defaults"])
+        return jsonify(defaults=config.to_json()["defaults"], language=config.language,
+                       languages=LANGUAGES, default_language=DEFAULT_LANG)
 
     @app.get("/api/embed/check")
     def api_embed_check():
@@ -115,6 +129,8 @@ def create_app(demo: bool = False, data_dir=None, config: Config | None = None, 
         old_port = config.port
         try:
             config.update(body)
+        except ConfigError as exc:
+            return error(exc.msg)
         except ValueError as exc:
             return error(str(exc))
         hook = app.config.get("on_settings_changed")
@@ -126,18 +142,18 @@ def create_app(demo: bool = False, data_dir=None, config: Config | None = None, 
     @app.get("/api/devices")
     def api_devices():
         if jobs.active():
-            return error("في عملية سكان شغّالة حالياً.", 409)
+            return error(Msg("err.busy"), 409)
         host = (request.args.get("host") or "").strip()[:100] or None
-        return jsonify(manager.diagnose(host))
+        return jsonify(manager.diagnose(host, request_lang()))
 
     @app.get("/api/scanners")
     def api_scanners():
         """All scanners found (USB + network) so the user can pick one before scanning."""
         if jobs.active():
-            return error("في عملية سكان شغّالة حالياً.", 409)
+            return error(Msg("err.busy"), 409)
         host = (request.args.get("host") or "").strip()[:100] or None
         devices, errors = manager.list_devices(host, threading.Event())
-        return jsonify(devices=[d.to_json() for d in devices], errors=errors)
+        return jsonify(devices=[d.to_json(request_lang()) for d in devices], errors=errors)
 
     @app.post("/api/scan")
     def api_scan():
@@ -153,29 +169,29 @@ def create_app(demo: bool = False, data_dir=None, config: Config | None = None, 
         duplex = body.get("duplex", False)
         device = body.get("device") or None
         if dpi not in DPI_CHOICES or color not in COLORS or source not in SOURCES or mode not in MODES:
-            return error("إعدادات غير صحيحة.")
+            return error(Msg("err.settings_invalid"))
         if not isinstance(duplex, bool) or (device is not None and (not isinstance(device, str) or len(device) > 80)):
-            return error("إعدادات غير صحيحة.")
+            return error(Msg("err.settings_invalid"))
         if duplex and source != "feeder":
-            return error("مسح الوجهين بيحتاج التغذية التلقائية (feeder).")
+            return error(Msg("err.duplex_needs_feeder"))
         try:
             job = jobs.start(ScanOptions(dpi=dpi, color=color, source=source, duplex=duplex), mode, host, device)
         except BusyError as exc:
-            return error("في عملية سكان شغّالة حالياً.", 409, job_id=exc.job_id)
+            return error(Msg("err.busy"), 409, job_id=exc.job_id)
         return jsonify(job_id=job.id), 202
 
     @app.get("/api/jobs/<job_id>")
     def api_job(job_id):
         job = jobs.get(job_id)
         if job is None:
-            return error("المهمة مو موجودة.", 404)
-        return jsonify(job.to_json())
+            return error(Msg("err.job_missing"), 404)
+        return jsonify(job.to_json(request_lang()))
 
     @app.post("/api/jobs/<job_id>/cancel")
     def api_cancel(job_id):
         job = jobs.get(job_id)
         if job is None:
-            return error("المهمة مو موجودة.", 404)
+            return error(Msg("err.job_missing"), 404)
         job.cancel.set()
         return jsonify(ok=True)
 
@@ -187,7 +203,7 @@ def create_app(demo: bool = False, data_dir=None, config: Config | None = None, 
     def _image(pid, thumb):
         path = store.image_path(pid, thumb)
         if path is None:
-            return error("الصفحة مو موجودة.", 404)
+            return error(Msg("err.page_missing"), 404)
         return send_file(path, mimetype="image/jpeg", max_age=3600)
 
     @app.get("/api/pages/<pid>/image")
@@ -209,7 +225,7 @@ def create_app(demo: bool = False, data_dir=None, config: Config | None = None, 
         body = request.get_json(silent=True) or {}
         ids = _ids(body)
         if ids is None or body.get("degrees") not in (90, -90, 180):
-            return error("طلب غير صحيح.")
+            return error(Msg("err.bad_request"))
         store.rotate(ids, body["degrees"])
         return jsonify(pages=[p.to_json() for p in store.list()])
 
@@ -217,7 +233,7 @@ def create_app(demo: bool = False, data_dir=None, config: Config | None = None, 
     def api_delete():
         ids = _ids(request.get_json(silent=True) or {})
         if ids is None:
-            return error("طلب غير صحيح.")
+            return error(Msg("err.bad_request"))
         store.delete(ids)
         return jsonify(pages=[p.to_json() for p in store.list()])
 
@@ -225,16 +241,16 @@ def create_app(demo: bool = False, data_dir=None, config: Config | None = None, 
     def api_reorder():
         ids = _ids(request.get_json(silent=True) or {})
         if ids is None:
-            return error("طلب غير صحيح.")
+            return error(Msg("err.bad_request"))
         store.reorder(ids)
         return jsonify(pages=[p.to_json() for p in store.list()])
 
     @app.post("/api/pages/trash")
     def api_trash():
-        """Delete pages but keep them for a minute so «تراجع» (undo) works."""
+        """Delete pages but keep them for a minute so Undo works."""
         ids = _ids(request.get_json(silent=True) or {})
         if ids is None:
-            return error("طلب غير صحيح.")
+            return error(Msg("err.bad_request"))
         store.trash(ids)
         return jsonify(pages=[p.to_json() for p in store.list()])
 
@@ -242,14 +258,14 @@ def create_app(demo: bool = False, data_dir=None, config: Config | None = None, 
     def api_restore():
         ids = _ids(request.get_json(silent=True) or {})
         if ids is None:
-            return error("طلب غير صحيح.")
+            return error(Msg("err.bad_request"))
         store.restore(ids)
         return jsonify(pages=[p.to_json() for p in store.list()])
 
     @app.post("/api/pages/clear")
     def api_clear():
         if jobs.active():
-            return error("استنى لحد ما يخلص السكان.", 409)
+            return error(Msg("err.wait_scan"), 409)
         store.clear()
         return jsonify(pages=[])
 
@@ -259,11 +275,11 @@ def create_app(demo: bool = False, data_dir=None, config: Config | None = None, 
         body = request.get_json(silent=True) or {}
         ids = _ids(body)
         if not ids:
-            return error("اختار صفحة وحدة على الأقل.")
+            return error(Msg("err.pick_page"))
         try:
             name, count = store.build_pdf(ids)
         except ValueError:
-            return error("الصفحات المختارة ما عادت موجودة.")
+            return error(Msg("err.pages_gone"))
         size = store.pdf_path(name).stat().st_size
         # What the user typed (cleaned). The internal file name stays scan_<time>.pdf.
         display = sanitize_filename(body.get("name"), default=name)
@@ -276,7 +292,7 @@ def create_app(demo: bool = False, data_dir=None, config: Config | None = None, 
     def api_pdf_download(name):
         path = store.pdf_path(name)
         if path is None:
-            return error("الملف مو موجود.", 404)
+            return error(Msg("err.file_missing"), 404)
         download_name = sanitize_filename(request.args.get("name"), default=name) if request.args.get("name") else name
         return send_file(path, mimetype="application/pdf", as_attachment=True, download_name=download_name)
 
@@ -284,12 +300,12 @@ def create_app(demo: bool = False, data_dir=None, config: Config | None = None, 
     def api_pdf_desktop(name):
         path = store.pdf_path(name)
         if path is None:
-            return error("الملف مو موجود.", 404)
+            return error(Msg("err.file_missing"), 404)
         wanted = (request.get_json(silent=True) or {}).get("name")
         try:
             dest = store.save_to_desktop(path, wanted if isinstance(wanted, str) else None)
         except OSError as exc:
-            return error(f"ما قدرت احفظ على سطح المكتب: {exc}", 500)
+            return error(Msg("err.desktop_save", reason=exc), 500)
         return jsonify(path=str(dest))
 
     return app
