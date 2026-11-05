@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ماسح المستندات</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23B9A779' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2'/%3E%3Cpath d='M3 12h18'/%3E%3C/svg%3E">
+  <script>
+    // theme sent by the host app: ?theme=dark|light  (must run before the CSS paints)
+    (function () {
+      var t = new URLSearchParams(location.search).get("theme");
+      if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
+    })();
+  </script>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="top-wrap">
+    <header class="top">
+      <span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2"/><path d="M3 12h18"/></svg></span>
+      <div>
+        <h1>ماسح المستندات</h1>
+        <p>اسكان الأوراق، اختار الصفحات اللي بدك ياها، وصدّرها ملف PDF.</p>
+      </div>
+    </header>
+  </div>
+
+  <main>
+    <!-- 1) Scan -->
+    <section class="card" aria-labelledby="scanTitle">
+      <h2 id="scanTitle" class="sr-only">السكان</h2>
+      <div class="device-row">
+        <label for="set-device">السكانر</label>
+        <select id="set-device"><option value="">تلقائي (USB ثم الشبكة)</option></select>
+        <button id="refreshDevices" class="btn ghost small" type="button">تحديث القائمة</button>
+      </div>
+      <p id="deviceInfo" class="hint device-info"></p>
+      <label class="check-row"><input type="checkbox" id="set-duplex"> مسح الوجهين (duplex) — بيحتاج التغذية التلقائية والسكانر لازم يدعمو</label>
+
+      <div class="scan-row">
+        <button id="scanBtn" class="btn primary big" type="button">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2"/><path d="M3 12h18"/></svg>
+          <span>سكان</span>
+        </button>
+        <button id="cancelBtn" class="btn ghost" type="button" hidden>إلغاء</button>
+      </div>
+      <p class="hint">اختار السكانر من القائمة (USB أو شبكة)، حط الورقة، واضغط «سكان». إذا اخترت «تلقائي» بيجرّب USB أول شي وبعدها الشبكة. لمسح كذا ورقة مرة وحدة من الـ feeder، افتح «إعدادات السكان» واختار «التغذية التلقائية».</p>
+
+      <div id="status" class="status" data-stage="idle" role="status" aria-live="polite" hidden>
+        <div class="status-line"><span class="dot"></span><span id="statusMsg"></span></div>
+        <div class="bar" id="statusBar"><i></i></div>
+      </div>
+
+      <details class="settings">
+        <summary>إعدادات السكان</summary>
+        <div class="grid-settings">
+          <label>الاتصال
+            <select id="set-mode">
+              <option value="auto">تلقائي (USB ثم الشبكة)</option>
+              <option value="usb">USB فقط</option>
+              <option value="network">الشبكة فقط</option>
+            </select>
+          </label>
+          <label>الدقة
+            <select id="set-dpi">
+              <option value="150">150 dpi (سريع)</option>
+              <option value="200">200 dpi</option>
+              <option value="300" selected>300 dpi (موصى فيه)</option>
+              <option value="600">600 dpi (بطيء)</option>
+            </select>
+          </label>
+          <label>الألوان
+            <select id="set-color">
+              <option value="color">ملوّن</option>
+              <option value="gray">رمادي</option>
+              <option value="bw">أبيض وأسود</option>
+            </select>
+          </label>
+          <label>مصدر الورق
+            <select id="set-source">
+              <option value="flatbed">السطح الزجاجي (ورقة ورقة)</option>
+              <option value="feeder">التغذية التلقائية (feeder)</option>
+            </select>
+          </label>
+          <label class="wide">عنوان IP للسكانر (اختياري — للشبكة)
+            <input id="set-host" type="text" dir="ltr" placeholder="مثال: 192.168.1.50" autocomplete="off" spellcheck="false">
+          </label>
+        </div>
+        <button id="diagBtn" class="btn ghost small" type="button">فحص الأجهزة المتوفرة</button>
+        <pre id="diag" class="diag" dir="auto" hidden></pre>
+      </details>
+    </section>
+
+    <!-- 2) Pages -->
+    <section class="card" aria-labelledby="pagesTitle">
+      <div class="pages-head">
+        <h2 id="pagesTitle">الصفحات <span id="pageCount" class="badge">0</span></h2>
+        <div class="toolbar" id="toolbar">
+          <button class="btn ghost small" id="selAll" type="button">تحديد الكل</button>
+          <button class="btn ghost small" id="selNone" type="button">إلغاء التحديد</button>
+          <button class="btn ghost small" id="rotBtn" type="button" title="تدوير المحدد 90°">↻ تدوير</button>
+          <button class="btn ghost small danger" id="delBtn" type="button">حذف المحدد</button>
+          <button class="btn ghost small danger" id="clearBtn" type="button">مسح الكل</button>
+        </div>
+      </div>
+      <div id="grid" class="grid"></div>
+      <p id="empty" class="empty">ما في صفحات بعد. اضغط «سكان» لتبدأ.</p>
+    </section>
+
+    <!-- 3) PDF result -->
+    <section id="pdfResult" class="card result" hidden aria-live="polite">
+      <h2>ملف الـ PDF جاهز ✓</h2>
+      <p id="pdfInfo" class="muted"></p>
+      <div class="result-actions">
+        <a id="pdfDownload" class="btn primary" href="#" download>تنزيل الملف</a>
+        <button id="pdfDesktop" class="btn" type="button">حفظ على سطح المكتب</button>
+      </div>
+      <p id="pdfSaved" class="saved" hidden></p>
+    </section>
+  </main>
+
+  <div class="actionbar">
+    <span id="selInfo" class="sel-info">المحدد: 0</span>
+    <div class="actions">
+      <button id="embedCancel" class="btn ghost" type="button" hidden>إلغاء</button>
+      <button id="embedSave" class="btn ghost" type="button" hidden disabled>حفظ PDF على الجهاز</button>
+      <button id="pdfBtn" class="btn primary" type="button" disabled>تحويل إلى PDF</button>
+    </div>
+  </div>
+
+  <div id="viewer" class="viewer" role="dialog" aria-modal="true" aria-label="عرض الصفحة بالحجم الكامل" hidden>
+    <div class="viewer-bar">
+      <button id="vClose" class="vbtn" type="button" title="إغلاق (Esc)" aria-label="إغلاق"></button>
+      <span id="vTitle" class="viewer-title"></span>
+      <span class="viewer-tools">
+        <button id="vZoomOut" class="vbtn" type="button" title="تصغير (-)" aria-label="تصغير"></button>
+        <span id="vZoom" class="vzoom" dir="ltr">100%</span>
+        <button id="vZoomIn" class="vbtn" type="button" title="تكبير (+)" aria-label="تكبير"></button>
+        <button id="vFit" class="vbtn" type="button" title="ملائمة الشاشة (0)" aria-label="ملائمة الشاشة"></button>
+      </span>
+    </div>
+    <div id="vStage" class="viewer-stage"><img id="vImg" alt="" draggable="false"></div>
+    <button id="vPrev" class="vbtn vnav vnav-prev" type="button" title="السابقة" aria-label="الصفحة السابقة"></button>
+    <button id="vNext" class="vbtn vnav vnav-next" type="button" title="التالية" aria-label="الصفحة التالية"></button>
+  </div>
+
+  <div id="nameDialog" class="modal" hidden>
+    <form id="nameForm" class="modal-card" role="dialog" aria-modal="true" aria-labelledby="nameTitle" novalidate>
+      <h2 id="nameTitle">اسم الملف</h2>
+      <label class="modal-label" for="nameInput">اسم المستند</label>
+      <div class="name-row"><input id="nameInput" class="name-input" type="text" maxlength="100" autocomplete="off" spellcheck="false"><span class="name-ext" dir="ltr">.pdf</span></div>
+      <p id="nameHint" class="name-hint" role="status"></p>
+      <div class="modal-actions">
+        <button id="nameCancel" class="btn ghost" type="button">إلغاء</button>
+        <button id="nameOk" class="btn primary" type="submit">حفظ</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="undoBar" class="undo" role="status" hidden><span id="undoText"></span><button id="undoBtn" type="button">تراجع</button></div>
+  <div id="toast" class="toast" role="alert" hidden></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

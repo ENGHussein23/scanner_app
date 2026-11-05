@@ -1,0 +1,2 @@
+# Only needed to build HomsScanner.exe (build_windows.bat installs these)
+pyinstaller>=6.6

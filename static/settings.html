@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>إعدادات الماسح</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="settings-page">
+  <div class="top-wrap">
+    <header class="top">
+      <span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2"/><path d="M3 12h18"/></svg></span>
+      <div>
+        <h1>إعدادات خدمة المسح</h1>
+        <p>الخدمة <span id="state" class="pill">شغّالة</span> <span id="version" class="muted"></span></p>
+      </div>
+    </header>
+  </div>
+
+  <main>
+    <section class="card">
+      <h2>التشغيل</h2>
+      <div class="row field" style="margin-top:12px">
+        <input id="autostart" type="checkbox">
+        <label for="autostart">شغّل الخدمة تلقائياً مع تشغيل ويندوز</label>
+      </div>
+      <label class="field">المنفذ (يحتاج إعادة تشغيل الخدمة)
+        <input id="port" type="text" dir="ltr" inputmode="numeric">
+      </label>
+      <p class="hint">الخدمة بتسمع على <code>127.0.0.1</code> فقط، يعني ما حدا من الشبكة بيقدر يوصلها.</p>
+    </section>
+
+    <section class="card">
+      <h2>المواقع المسموح لها تعرض صفحة المسح</h2>
+      <p class="hint">عنوان كل موقع بسطر، مثل <code>https://docs.example.gov.sy</code>. استعمل <code>:*</code> لأي منفذ، مثل <code>http://localhost:*</code> (للتطوير).</p>
+      <label class="field" style="margin-top:12px">
+        <textarea id="origins" spellcheck="false"></textarea>
+      </label>
+    </section>
+
+    <section class="card">
+      <h2>القيم الافتراضية للمسح</h2>
+      <div class="grid-settings">
+        <label>الاتصال
+          <select id="d-mode"><option value="auto">تلقائي (USB ثم الشبكة)</option><option value="usb">USB فقط</option><option value="network">الشبكة فقط</option></select>
+        </label>
+        <label>الدقة
+          <select id="d-dpi"><option>100</option><option>150</option><option>200</option><option>300</option><option>400</option><option>600</option></select>
+        </label>
+        <label>الألوان
+          <select id="d-color"><option value="color">ملوّن</option><option value="gray">رمادي</option><option value="bw">أبيض وأسود</option></select>
+        </label>
+        <label>مصدر الورق
+          <select id="d-source"><option value="flatbed">السطح الزجاجي</option><option value="feeder">التغذية التلقائية</option></select>
+        </label>
+        <div class="wide check-row" style="margin:0"><input id="d-duplex" type="checkbox"><label for="d-duplex" style="display:inline">مسح الوجهين افتراضياً (للسكانرات اللي بتدعمو)</label></div>
+        <label class="wide">عنوان IP للسكانر الشبكي (اختياري)
+          <input id="d-host" type="text" dir="ltr" placeholder="192.168.1.50" autocomplete="off">
+        </label>
+      </div>
+      <p class="hint">المستخدم بيقدر يغيّرها من صفحة المسح، واختياره بيتذكّره الجهاز.</p>
+    </section>
+
+    <section class="card">
+      <h2>فحص السكانر</h2>
+      <p class="hint">بيعرض الأجهزة اللي لقيها البرنامج (USB وشبكة).</p>
+      <button id="diagBtn" class="btn small" type="button">فحص الأجهزة المتوفرة</button>
+      <pre id="diag" class="diag" dir="auto" hidden></pre>
+    </section>
+
+    <div class="result-actions">
+      <button id="saveBtn" class="btn primary" type="button">حفظ الإعدادات</button>
+      <a class="btn" href="/">فتح صفحة المسح</a>
+    </div>
+    <p id="msg" class="saved" role="status" hidden></p>
+  </main>
+  <div id="toast" class="toast" role="alert" hidden></div>
+  <script src="/static/settings.js"></script>
+</body>
+</html>

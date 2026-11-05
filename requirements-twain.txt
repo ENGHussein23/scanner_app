@@ -1,0 +1,2 @@
+# Optional: only if your scanner does NOT show up through WIA (the default).
+pytwain
